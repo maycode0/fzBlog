@@ -1,0 +1,367 @@
+---
+import { getCollection } from 'astro:content';
+import BackToTop from '../components/BackToTop.astro';
+import BaseHead from '../components/BaseHead.astro';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import Sidebar from '../components/Sidebar.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
+import { countTags, excerpt, formatDate, inferTags, postUrl, sortPosts } from '../lib/blog';
+
+const posts = sortPosts(await getCollection('blog'));
+const tagCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
+const tags = countTags(posts).sort((a, b) => tagCollator.compare(a.name, b.name));
+const hotTags = countTags(posts).slice(0, 8);
+const counts = tags.map((tag) => tag.count);
+const minCount = Math.min(...counts);
+const maxCount = Math.max(...counts);
+const searchIndex = posts.map((post) => ({
+	title: post.data.title,
+	description: excerpt(post, 160),
+	category: post.data.category,
+	tags: post.data.tags?.length ? post.data.tags : inferTags(post),
+	date: formatDate(post.data.pubDate),
+	url: postUrl(post),
+	body: post.body,
+}));
+
+function tagStyle(count: number) {
+	const weight = maxCount === minCount ? 0 : (count - minCount) / (maxCount - minCount);
+	const from = [163, 167, 171];
+	const to = [77, 87, 109];
+	const color = from.map((value, index) => Math.round(value + (to[index] - value) * weight));
+	const fontSize = 16 + weight * 16;
+	return `font-size: ${fontSize.toFixed(2)}px; color: rgb(${color.join(', ')});`;
+}
+---
+
+<!doctype html>
+<html lang="zh-CN" id="top">
+	<head>
+		<BaseHead title={`搜索 | ${SITE_TITLE}`} description={SITE_DESCRIPTION} />
+	</head>
+	<body>
+		<Header />
+		<main class="page-shell">
+			<Sidebar posts={posts} side="left" />
+			<section class="content-stack search-stack">
+				<section class="panel search-panel">
+					<h1 class="search-heading"><span>搜索</span><span>大浪淘沙始见金</span></h1>
+					<form class="search-box" action="/search/" method="get">
+						<div class="search-field">
+							<label class="sr-only" for="search-input">请输入关键字</label>
+							<input id="search-input" name="s" type="search" placeholder="请输入关键字..." autocomplete="off" />
+						</div>
+						<button type="submit">搜索</button>
+					</form>
+				</section>
+
+				<section class="panel result-panel">
+					<div class="search-default" data-default>
+						<p>这是 {SITE_TITLE} 的站内搜索引擎。</p>
+						<p class="hot-words">
+							<span>热搜词：</span>{hotTags.map((tag) => <a href={`/search/?s=${encodeURIComponent(tag.name)}`}>{tag.name}</a>)}
+						</p>
+						<p>
+							搜索多个关键词时请用空格分隔，如「<a href="/search/?s=Astro Markdown">Astro Markdown</a>」、「<a
+								href="/search/?s=博客 记录">博客 记录</a
+							>」。
+						</p>
+						<p>你也可以在下面的标签中试试运气：</p>
+						<div class="search-tag-cloud">
+							{tags.map((tag) => <a href={`/tags/${encodeURIComponent(tag.name)}/`} style={tagStyle(tag.count)}>{tag.name}</a>)}
+						</div>
+					</div>
+					<div class="search-result-state" data-result-state hidden>
+						<p class="result-summary" data-summary></p>
+						<div class="results" data-results></div>
+					</div>
+				</section>
+			</section>
+			<Sidebar posts={posts} side="right" />
+		</main>
+		<BackToTop />
+		<Footer />
+
+		<script define:vars={{ searchIndex }} data-astro-rerun>
+			const data = searchIndex;
+			const form = document.querySelector('.search-box');
+			const input = document.querySelector('#search-input');
+			const results = document.querySelector('[data-results]');
+			const summary = document.querySelector('[data-summary]');
+			const defaultState = document.querySelector('[data-default]');
+			const resultState = document.querySelector('[data-result-state]');
+
+			function escapeHtml(value) {
+				return String(value || '').replace(/[&<>"']/g, (char) => ({
+					'&': '&amp;',
+					'<': '&lt;',
+					'>': '&gt;',
+					'"': '&quot;',
+					"'": '&#039;',
+				})[char]);
+			}
+
+			function escapeRegExp(value) {
+				return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			}
+
+			function queryTerms(query) {
+				return query.split(/\s+/).map((term) => term.trim()).filter(Boolean);
+			}
+
+			function highlight(value, terms) {
+				const escapedValue = escapeHtml(value);
+				if (!terms.length) return escapedValue;
+				const pattern = terms.map(escapeRegExp).join('|');
+				return escapedValue.replace(new RegExp(pattern, 'gi'), (match) => `<mark>${match}</mark>`);
+			}
+
+			function snippet(text, terms) {
+				const plain = text.replace(/```[\s\S]*?```/g, ' ').replace(/[#>*_`~-]/g, ' ').replace(/\s+/g, ' ').trim();
+				const lower = plain.toLowerCase();
+				const firstTerm = terms[0] || '';
+				const index = lower.indexOf(firstTerm.toLowerCase());
+				if (index < 0) return '';
+				const start = Math.max(0, index - 85);
+				const end = Math.min(plain.length, index + firstTerm.length + 260);
+				return `${start > 0 ? '...' : ''}${plain.slice(start, end).trim()}${end < plain.length ? '...' : ''}`;
+			}
+
+			function render() {
+				const query = input.value.trim();
+				const terms = queryTerms(query);
+				if (!query) {
+					results.innerHTML = '';
+					defaultState.hidden = false;
+					resultState.hidden = true;
+					return;
+				}
+
+				const started = performance.now();
+				const matched = data
+					.map((post) => {
+						const haystack = [post.title, post.description, post.category, ...post.tags, post.body].join(' ');
+						const normalized = haystack.toLowerCase();
+						const hit = terms.every((term) => normalized.includes(term.toLowerCase()));
+						return {
+							...post,
+							hit,
+							snippet: snippet(haystack, terms) || post.description,
+						};
+					})
+					.filter((post) => post.hit);
+
+				summary.textContent = `找到 ${matched.length} 条关于「${query}」的结果（用时 ${Math.max(1, Math.round(performance.now() - started))} 毫秒）`;
+				defaultState.hidden = true;
+				resultState.hidden = false;
+				results.innerHTML = matched.map((post) => `
+					<div class="search-divider"></div>
+					<a class="search-result" href="${post.url}">
+						<strong>${highlight(post.title, terms)}</strong>
+						<div class="result-snippet">${highlight(post.snippet, terms)}</div>
+					</a>
+				`).join('');
+			}
+
+			form.addEventListener('submit', (event) => {
+				event.preventDefault();
+				const params = new URLSearchParams(window.location.search);
+				const query = input.value.trim();
+				if (query) {
+					params.set('s', query);
+					history.replaceState(null, '', `${window.location.pathname}?${params}`);
+				} else {
+					history.replaceState(null, '', window.location.pathname);
+				}
+				render();
+			});
+
+			input.addEventListener('input', render);
+			input.value = new URLSearchParams(window.location.search).get('s') || '';
+			render();
+		</script>
+	</body>
+</html>
+
+<style>
+	.search-stack {
+		gap: 22.5px;
+	}
+
+	.search-panel,
+	.result-panel {
+		border: 0;
+		box-shadow: none;
+		color: var(--text);
+		font-size: 15px;
+		line-height: 22.5px;
+		padding: 22.5px;
+	}
+
+	.search-heading {
+		margin: 0;
+		color: var(--text);
+		font-size: 15px;
+		font-weight: 400;
+		line-height: 22.5px;
+	}
+
+	.search-heading span:first-child {
+		margin-right: 11.25px;
+		color: var(--text-strong);
+	}
+
+	.search-box {
+		position: relative;
+		display: flex;
+		width: 100%;
+		height: 37.5px;
+		margin-top: 22.5px;
+	}
+
+	.search-field {
+		position: relative;
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	.search-field::before {
+		position: absolute;
+		top: 11.25px;
+		left: 10.5px;
+		width: 10px;
+		height: 10px;
+		border: 1.8px solid var(--search-icon);
+		border-radius: 50%;
+		content: "";
+		pointer-events: none;
+	}
+
+	.search-field::after {
+		position: absolute;
+		top: 23px;
+		left: 22px;
+		width: 7px;
+		height: 1.8px;
+		background: var(--search-icon);
+		content: "";
+		pointer-events: none;
+		transform: rotate(45deg);
+		transform-origin: left center;
+	}
+
+	.search-box input {
+		width: 100%;
+		height: 37.5px;
+		min-width: 0;
+		border: 0;
+		border-radius: 8px 0 0 8px;
+		background: var(--surface-strong);
+		color: var(--text);
+		font-size: 15px;
+		line-height: 22.5px;
+		outline: none;
+		padding: 7px 16px 7px 36px;
+	}
+
+	.search-box button {
+		flex: 0 0 68px;
+		height: 37.5px;
+		border: 0;
+		border-radius: 0 8px 8px 0;
+		background: var(--link-blue);
+		color: #fff;
+		cursor: pointer;
+		font-size: 16px;
+		font-weight: 400;
+		line-height: normal;
+		padding: 7px 18px;
+	}
+
+	.search-default p,
+	.result-summary {
+		margin: 0 0 15px;
+		color: var(--text);
+		font-size: 15px;
+		line-height: 22.5px;
+	}
+
+	.search-default p:last-of-type {
+		margin-bottom: 15px;
+	}
+
+	.search-default a,
+	.hot-words a {
+		color: var(--link-blue);
+	}
+
+	.hot-words a {
+		display: inline;
+		margin-right: 11.25px;
+	}
+
+	.search-tag-cloud {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		margin: 0;
+	}
+
+	.search-tag-cloud a {
+		display: block;
+		padding: 15px;
+		line-height: 1;
+	}
+
+	.search-tag-cloud a:hover {
+		color: var(--accent) !important;
+	}
+
+	.result-summary {
+		margin-bottom: 15px;
+	}
+
+	.results {
+		display: block;
+	}
+
+	:global(.search-divider) {
+		height: 0;
+		border-top: 1px solid var(--surface-strong);
+	}
+
+	:global(.search-result) {
+		display: block;
+		padding: 9px;
+		color: var(--text);
+	}
+
+	:global(.search-result strong) {
+		display: inline;
+		font-size: 15px;
+		font-weight: 700;
+		line-height: 22.5px;
+	}
+
+	:global(.search-result .result-snippet) {
+		display: block;
+		max-height: 66px;
+		overflow: hidden;
+		color: var(--text);
+		font-size: 15px;
+		line-height: 22.5px;
+	}
+
+	:global(.search-result:hover),
+	:global(.search-result:hover strong) {
+		color: var(--accent);
+	}
+
+	:global(.search-result mark) {
+		border-radius: 2px;
+		background: var(--mark);
+		color: rgb(80, 89, 108);
+		padding: 0.8px;
+	}
+</style>

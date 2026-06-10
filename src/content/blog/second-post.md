@@ -2,6 +2,8 @@
 title: 'Second post'
 description: 'Lorem ipsum dolor sit amet'
 pubDate: 'Jul 15 2022'
+category: '自言语'
+tags: ['生活', '随笔']
 heroImage: '../../assets/blog-placeholder-4.jpg'
 ---
 

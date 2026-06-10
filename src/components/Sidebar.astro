@@ -1,0 +1,477 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import {
+	archiveYears,
+	countCategories,
+	countTags,
+	formatDate,
+	postUrl,
+	readingStats,
+} from '../lib/blog';
+
+interface Props {
+	posts: CollectionEntry<'blog'>[];
+	side?: 'left' | 'right' | 'article-left';
+	headings?: { depth: number; slug: string; text: string }[];
+	relatedPosts?: CollectionEntry<'blog'>[];
+	showArchive?: boolean;
+}
+
+const { posts, side = 'left', headings = [], relatedPosts = [], showArchive = true } = Astro.props;
+const stats = readingStats(posts);
+const categories = countCategories(posts);
+const tags = countTags(posts).slice(0, 12);
+const years = archiveYears(posts);
+const recentPosts = posts.slice(0, 4);
+---
+
+{
+	side === 'left' ? (
+		<aside class="side-stack left-rail" aria-label="博客信息">
+			<div class="sidebar-sticky">
+				<section class="panel profile">
+					<div class="avatar">FZ</div>
+					<h2>FZ</h2>
+					<p>把长期折腾写成可以复盘的记录</p>
+					<div class="stats">
+						<div>
+							<strong>{stats.posts}</strong>
+							<span>文章</span>
+						</div>
+						<div>
+							<strong>{stats.categories}</strong>
+							<span>分类</span>
+						</div>
+						<div>
+							<strong>{stats.tags}</strong>
+							<span>标签</span>
+						</div>
+						<div>
+							<strong>{stats.words}</strong>
+							<span>字数</span>
+						</div>
+					</div>
+				</section>
+
+				<section class="panel">
+					<h2 class="panel-title">分类</h2>
+					<ul class="link-list">
+						{categories.map((item) => (
+							<li>
+								<a href={`/categories/${encodeURIComponent(item.name)}/`}>
+									<span>{item.name}</span>
+									<span class="badge">{item.count}</span>
+								</a>
+							</li>
+						))}
+					</ul>
+				</section>
+
+				<section class="panel">
+					<h2 class="panel-title">热门标签</h2>
+					<div class="tag-cloud">
+						{tags.map((tag) => (
+							<a href={`/tags/${encodeURIComponent(tag.name)}/`}># {tag.name}</a>
+						))}
+					</div>
+				</section>
+			</div>
+		</aside>
+	) : side === 'article-left' ? (
+		<aside class="side-stack left-rail article-left" aria-label="文章辅助导航">
+			<section class="panel profile">
+				<div class="avatar">FZ</div>
+				<h2>FZ</h2>
+				<p>把长期折腾写成可以复盘的记录</p>
+				<div class="stats">
+					<div>
+						<strong>{stats.posts}</strong>
+						<span>文章</span>
+					</div>
+					<div>
+						<strong>{stats.categories}</strong>
+						<span>分类</span>
+					</div>
+					<div>
+						<strong>{stats.tags}</strong>
+						<span>标签</span>
+					</div>
+					<div>
+						<strong>{stats.words}</strong>
+						<span>字数</span>
+					</div>
+				</div>
+			</section>
+
+			<div class="article-left-sticky">
+				{
+					headings.length > 0 && (
+						<section class="panel toc-panel">
+							<h2 class="panel-title">文章目录</h2>
+							<nav class="toc" aria-label="文章目录">
+								{headings.map((heading) => (
+									<a class={`depth-${heading.depth}`} href={`#${heading.slug}`} data-toc-link>
+										{heading.text}
+									</a>
+								))}
+							</nav>
+						</section>
+					)
+				}
+
+				<section class="panel">
+					<h2 class="panel-title">分类</h2>
+					<ul class="link-list">
+						{categories.map((item) => (
+							<li>
+								<a href={`/categories/${encodeURIComponent(item.name)}/`}>
+									<span>{item.name}</span>
+									<span class="badge">{item.count}</span>
+								</a>
+							</li>
+						))}
+					</ul>
+				</section>
+
+				<section class="panel">
+					<h2 class="panel-title">热门标签</h2>
+					<div class="tag-cloud">
+						{tags.map((tag) => (
+							<a href={`/tags/${encodeURIComponent(tag.name)}/`}># {tag.name}</a>
+						))}
+					</div>
+				</section>
+			</div>
+		</aside>
+	) : (
+		<aside class="side-stack right-rail" aria-label="文章导航">
+			<div class="sidebar-sticky">
+				{
+					relatedPosts.length > 0 && (
+						<section class="panel">
+							<h2 class="panel-title">相关文章</h2>
+							<ul class="recent-list">
+								{relatedPosts.map((post) => (
+									<li>
+										<time datetime={post.data.pubDate.toISOString()}>{formatDate(post.data.pubDate)}</time>
+										<a href={postUrl(post)}>{post.data.title}</a>
+									</li>
+								))}
+							</ul>
+						</section>
+					)
+				}
+
+				<section class="panel">
+					<h2 class="panel-title">最近文章</h2>
+					<ul class="recent-list">
+						{recentPosts.map((post) => (
+							<li>
+								<time datetime={post.data.pubDate.toISOString()}>{formatDate(post.data.pubDate)}</time>
+								<a href={postUrl(post)}>{post.data.title}</a>
+							</li>
+						))}
+					</ul>
+				</section>
+
+				{
+					showArchive && (
+						<section class="panel">
+							<h2 class="panel-title">归档</h2>
+							<ul class="link-list">
+								{years.map((item) => (
+									<li>
+										<a href={`/archives/#year-${item.name}`}>
+											<span>{item.name}</span>
+											<span class="badge">{item.count}</span>
+										</a>
+									</li>
+								))}
+							</ul>
+						</section>
+					)
+				}
+			</div>
+		</aside>
+	)
+}
+
+<script>
+	let cleanupArticleToc = () => {};
+
+	function initArticleToc() {
+		cleanupArticleToc();
+		cleanupArticleToc = () => {};
+
+		const tocLinks = [...document.querySelectorAll<HTMLAnchorElement>('[data-toc-link]')];
+		if (!tocLinks.length) return;
+
+		const headings = tocLinks
+			.map((link) => {
+				const id = decodeURIComponent(link.hash.slice(1));
+				return { id, link, heading: document.getElementById(id) };
+			})
+			.filter((item): item is { id: string; link: HTMLAnchorElement; heading: HTMLElement } => Boolean(item.heading));
+
+		if (!headings.length) return;
+
+		let ticking = false;
+
+		const syncActiveToc = () => {
+			let activeId = headings[0]?.id ?? '';
+			for (const item of headings) {
+				if (item.heading.getBoundingClientRect().top <= 140) {
+					activeId = item.id;
+				} else {
+					break;
+				}
+			}
+
+			let activeLink: HTMLAnchorElement | undefined;
+			for (const item of headings) {
+				const active = item.id === activeId;
+				item.link.classList.toggle('is-active', active);
+				if (active) activeLink = item.link;
+			}
+
+			const panel = activeLink?.closest<HTMLElement>('.toc-panel');
+			if (panel && activeLink) {
+				const panelRect = panel.getBoundingClientRect();
+				const linkRect = activeLink.getBoundingClientRect();
+				if (linkRect.top < panelRect.top + 42) {
+					panel.scrollTop -= panelRect.top + 42 - linkRect.top;
+				} else if (linkRect.bottom > panelRect.bottom - 22) {
+					panel.scrollTop += linkRect.bottom - (panelRect.bottom - 22);
+				}
+			}
+
+			ticking = false;
+		};
+
+		const queueSyncToc = () => {
+			if (!ticking) {
+				ticking = true;
+				requestAnimationFrame(syncActiveToc);
+			}
+		};
+
+		syncActiveToc();
+		document.addEventListener('scroll', queueSyncToc, { passive: true });
+		window.addEventListener('resize', queueSyncToc);
+		cleanupArticleToc = () => {
+			document.removeEventListener('scroll', queueSyncToc);
+			window.removeEventListener('resize', queueSyncToc);
+		};
+	}
+
+	document.addEventListener('astro:page-load', initArticleToc);
+	initArticleToc();
+</script>
+
+<style>
+	.profile {
+		text-align: center;
+	}
+
+	.sidebar-sticky,
+	.article-left-sticky {
+		display: flex;
+		flex-direction: column;
+		gap: 22.5px;
+		width: 100%;
+	}
+
+	@media (min-width: 1121px) {
+		.sidebar-sticky,
+		.article-left-sticky {
+			position: sticky;
+			top: 22.5px;
+			align-self: start;
+		}
+	}
+
+	.avatar {
+		display: grid;
+		width: 96px;
+		height: 96px;
+		margin: 0 auto 15px;
+		place-items: center;
+		border-radius: 50%;
+		background:
+			radial-gradient(circle at 35% 25%, #ffe7a3 0 18%, transparent 19%),
+			linear-gradient(135deg, #13a8d8, #51617a 55%, #f2c84b);
+		color: #0f1722;
+		font-size: 1.6rem;
+		font-weight: 700;
+	}
+
+	.profile h2 {
+		margin: 0 0 15px;
+		color: var(--text-strong);
+		font-size: 22.5px;
+		font-weight: 400;
+		line-height: 25.3125px;
+	}
+
+	.profile p {
+		margin: 0 auto 15px;
+		color: var(--text);
+		font-size: 15px;
+		line-height: 22.5px;
+	}
+
+	.stats {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 0;
+	}
+
+	.stats strong,
+	.stats span {
+		display: block;
+	}
+
+	.stats strong {
+		color: var(--text-strong);
+		font-size: 22.5px;
+		font-weight: 400;
+		line-height: 33.75px;
+	}
+
+	.stats span {
+		color: var(--text);
+		font-size: 14px;
+		line-height: 21px;
+	}
+
+	.link-list,
+	.recent-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.link-list a {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		color: var(--text);
+		min-height: 34.4px;
+		padding: 7px 10.5px;
+		font-size: 14px;
+		line-height: 17.5px;
+	}
+
+	.link-list a:hover,
+	.recent-list a:hover {
+		color: var(--accent);
+	}
+
+	.recent-list li {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding-bottom: 15px;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.recent-list li:last-child {
+		padding-bottom: 0;
+		border-bottom: 0;
+	}
+
+	.recent-list time {
+		color: var(--text);
+		font-size: 13px;
+		line-height: 19.5px;
+	}
+
+	.recent-list a {
+		color: var(--text-strong);
+		font-size: 14px;
+		line-height: 21px;
+	}
+
+	.tag-cloud {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0;
+	}
+
+	.tag-cloud a {
+		display: block;
+		margin-right: 4.5px;
+		padding: 3px;
+		color: var(--link-blue);
+		font-size: 14px;
+		line-height: 28px;
+	}
+
+	.tag-cloud a:hover {
+		color: var(--accent);
+	}
+
+	.toc-panel {
+		box-sizing: content-box;
+		max-height: 150px;
+		overflow: auto;
+		padding: 22.5px;
+		scrollbar-color: var(--muted-2) transparent;
+		scrollbar-width: thin;
+	}
+
+	.toc-panel::-webkit-scrollbar {
+		width: 6px;
+		height: 6px;
+	}
+
+	.toc-panel::-webkit-scrollbar-thumb {
+		border-radius: 999px;
+		background: var(--scroll-thumb);
+	}
+
+	.toc-panel::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.toc {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+
+	.toc a {
+		display: flex;
+		align-items: center;
+		min-height: 32px;
+		padding: 7px 10.5px;
+		border-radius: 0;
+		color: var(--text);
+		font-size: 0.875rem;
+		line-height: 1.25;
+	}
+
+	.toc a.is-active {
+		color: var(--toc-active);
+	}
+
+	.toc a:hover {
+		color: var(--text-strong);
+	}
+
+	.toc .depth-3 {
+		width: calc(100% - 34px);
+		margin-left: 23px;
+	}
+
+	.toc-panel .panel-title {
+		margin-bottom: 15px;
+		color: var(--text-muted);
+		font-size: 13px;
+		line-height: 19.5px;
+	}
+</style>

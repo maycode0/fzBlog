@@ -6,6 +6,7 @@ import type { ImageMetadata } from 'astro';
 import FallbackImage from '../assets/blog-placeholder-1.jpg';
 import { SITE_TITLE } from '../consts';
 import { Font } from 'astro:assets';
+import { ClientRouter } from 'astro:transitions';
 
 interface Props {
 	title: string;
@@ -33,6 +34,29 @@ const { title, description, image = FallbackImage } = Astro.props;
 <meta name="generator" content={Astro.generator} />
 
 <Font cssVariable="--font-atkinson" preload />
+<script is:inline>
+	(() => {
+		const applyTheme = () => {
+			try {
+				const storedTheme = localStorage.getItem('theme');
+				const theme = storedTheme === 'light' || storedTheme === 'dark' ? storedTheme : 'dark';
+				document.documentElement.dataset.theme = theme;
+				document.documentElement.style.colorScheme = theme;
+			} catch {
+				document.documentElement.dataset.theme = 'dark';
+				document.documentElement.style.colorScheme = 'dark';
+			}
+		};
+
+		window.__fzApplyTheme = applyTheme;
+		if (!window.__fzThemeSwapBound) {
+			document.addEventListener('astro:after-swap', applyTheme);
+			window.__fzThemeSwapBound = true;
+		}
+		applyTheme();
+	})();
+</script>
+<ClientRouter fallback="swap" />
 
 <!-- Canonical URL -->
 <link rel="canonical" href={canonicalURL} />

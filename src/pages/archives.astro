@@ -1,0 +1,166 @@
+---
+import { Image } from 'astro:assets';
+import { getCollection } from 'astro:content';
+import BackToTop from '../components/BackToTop.astro';
+import BaseHead from '../components/BaseHead.astro';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import Sidebar from '../components/Sidebar.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
+import { formatDate, postUrl, sortPosts } from '../lib/blog';
+
+const posts = sortPosts(await getCollection('blog'));
+const grouped = new Map<string, typeof posts>();
+for (const post of posts) {
+	const year = String(post.data.pubDate.getFullYear());
+	grouped.set(year, [...(grouped.get(year) || []), post]);
+}
+const archiveGroups = [...grouped.entries()].sort(([a], [b]) => Number(b) - Number(a));
+---
+
+<!doctype html>
+<html lang="zh-CN" id="top">
+	<head>
+		<BaseHead title={`归档 | ${SITE_TITLE}`} description={SITE_DESCRIPTION} />
+	</head>
+	<body>
+		<Header />
+		<main class="page-shell archive-shell">
+			<Sidebar posts={posts} side="left" />
+			<section class="content-stack archive-list">
+				{
+					archiveGroups.map(([year, items]) => (
+						<section class="archive-year" id={`year-${year}`}>
+							<h2>{year}</h2>
+							<div class="archive-entries">
+								{items.map((post) => (
+									<article class="archive-entry">
+										<div class="archive-entry-body">
+											<div class="archive-date">
+												<time datetime={post.data.pubDate.toISOString()}>{formatDate(post.data.pubDate)}</time>
+											</div>
+											<a class="archive-title" href={postUrl(post)}>{post.data.title}</a>
+										</div>
+										<a class="archive-thumb" href={postUrl(post)} aria-label={post.data.title}>
+											{
+												post.data.heroImage ? (
+													<Image width={246} height={204} src={post.data.heroImage} alt={post.data.title} />
+												) : (
+													<span>{post.data.category}</span>
+												)
+											}
+										</a>
+									</article>
+								))}
+							</div>
+						</section>
+					))
+				}
+			</section>
+			<Sidebar posts={posts} side="right" />
+		</main>
+		<BackToTop />
+		<Footer />
+	</body>
+</html>
+
+<style>
+	.archive-list {
+		gap: 0;
+	}
+
+	.archive-list > .archive-year {
+		margin-top: 0;
+	}
+
+	.archive-year h2 {
+		margin: 0;
+		padding-top: 22.5px;
+		color: var(--text-strong);
+		font-size: 30px;
+		font-weight: 600;
+		line-height: 30px;
+	}
+
+	.archive-entries {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+
+	.archive-entry {
+		display: flex;
+		min-height: 102px;
+		margin-top: 22.5px;
+		overflow: auto;
+		border-radius: var(--radius);
+		background: var(--surface);
+		box-shadow: var(--shadow);
+	}
+
+	.archive-entry-body {
+		flex: 1 1 auto;
+		min-width: 0;
+		padding: 15px;
+	}
+
+	.archive-date {
+		margin-bottom: 7.5px;
+		color: var(--text-muted);
+		font-size: 13px;
+		line-height: 19.5px;
+	}
+
+	.archive-title {
+		display: block;
+		color: var(--text-strong);
+		font-size: 15px;
+		line-height: 22.5px;
+	}
+
+	.archive-title:hover {
+		color: var(--accent);
+	}
+
+	.archive-thumb {
+		position: relative;
+		display: block;
+		flex: 0 0 123px;
+		width: 123px;
+		background: var(--surface-strong);
+		color: var(--muted);
+	}
+
+	.archive-thumb img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.archive-thumb span {
+		display: grid;
+		height: 100%;
+		place-items: center;
+		padding: 10px;
+		font-size: 0.82rem;
+		text-align: center;
+	}
+
+	@media (max-width: 760px) {
+		.archive-list {
+			margin-top: 0;
+		}
+	}
+
+	@media (max-width: 560px) {
+		.archive-entry {
+			min-height: 0;
+		}
+
+		.archive-thumb {
+			display: none;
+		}
+	}
+</style>

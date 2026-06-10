@@ -1,86 +1,410 @@
 ---
 import { Image } from 'astro:assets';
+import { getCollection } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
+import BackToTop from '../components/BackToTop.astro';
 import BaseHead from '../components/BaseHead.astro';
+import Comments from '../components/Comments.astro';
 import Footer from '../components/Footer.astro';
-import FormattedDate from '../components/FormattedDate.astro';
 import Header from '../components/Header.astro';
+import Sidebar from '../components/Sidebar.astro';
+import { SITE_TITLE } from '../consts';
+import {
+	estimateWords,
+	formatDate,
+	inferTags,
+	postUrl,
+	relatedPosts,
+	sortPosts,
+} from '../lib/blog';
 
-type Props = CollectionEntry<'blog'>['data'];
+type Props = CollectionEntry<'blog'>['data'] & {
+	post?: CollectionEntry<'blog'>;
+	headings?: { depth: number; slug: string; text: string }[];
+};
 
-const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
+const { post, title, description, pubDate, updatedDate, heroImage, category } = Astro.props;
+const headings = Astro.props.headings?.filter((heading) => heading.depth > 1 && heading.depth < 4) ?? [];
+const posts = sortPosts(await getCollection('blog'));
+const related = post ? relatedPosts(posts, post, 5) : [];
+const tags = post ? (post.data.tags?.length ? post.data.tags : inferTags(post)) : [];
+const wordCount = post ? estimateWords(post.body) : 0;
+const effectiveCategory = category || '关于';
+const footerTags = tags.filter((tag) => tag !== effectiveCategory);
+const currentIndex = post ? posts.findIndex((item) => item.id === post.id) : -1;
+const previousPost = currentIndex > 0 ? posts[currentIndex - 1] : undefined;
+const nextPost = currentIndex >= 0 && currentIndex < posts.length - 1 ? posts[currentIndex + 1] : undefined;
+const hasAdjacentPosts = Boolean(previousPost || nextPost);
+const hasBothAdjacentPosts = Boolean(previousPost && nextPost);
 ---
 
-<html lang="en">
+<!doctype html>
+<html lang="zh-CN" id="top">
 	<head>
-		<BaseHead title={title} description={description} />
-		<style>
-			main {
-				width: calc(100% - 2em);
-				max-width: 100%;
-				margin: 0;
-			}
-			.hero-image {
-				width: 100%;
-			}
-			.hero-image img {
-				display: block;
-				margin: 0 auto;
-				border-radius: 12px;
-				box-shadow: var(--box-shadow);
-			}
-			.prose {
-				width: 720px;
-				max-width: calc(100% - 2em);
-				margin: auto;
-				padding: 1em;
-				color: rgb(var(--gray-dark));
-			}
-			.title {
-				margin-bottom: 1em;
-				padding: 1em 0;
-				text-align: center;
-				line-height: 1;
-			}
-			.title h1 {
-				margin: 0 0 0.5em 0;
-			}
-			.date {
-				margin-bottom: 0.5em;
-				color: rgb(var(--gray));
-			}
-			.last-updated-on {
-				font-style: italic;
-			}
-		</style>
+		<BaseHead title={`${title} | ${SITE_TITLE}`} description={description} image={heroImage} />
 	</head>
 
 	<body>
 		<Header />
-		<main>
-			<article>
-				<div class="hero-image">
-					{heroImage && <Image width={1020} height={510} src={heroImage} alt="" />}
-				</div>
-				<div class="prose">
-					<div class="title">
-						<div class="date">
-							<FormattedDate date={pubDate} />
+		<main class="page-shell article-shell">
+			<Sidebar posts={posts} side="article-left" headings={headings} />
+
+			<section class="content-stack article-main">
+			<article class="article-panel">
+				{heroImage && <Image class="article-hero" width={1100} height={520} src={heroImage} alt={title} />}
+				<div class="article-content prose">
+					<header class="article-header">
+						<h1>{title}</h1>
+						<div class="article-meta">
+							<time datetime={pubDate.toISOString()}>{formatDate(pubDate)}</time>
 							{
-								updatedDate && (
-									<div class="last-updated-on">
-										Last updated on <FormattedDate date={updatedDate} />
-									</div>
+								post && (
+									<>
+										<span>·</span>
+										<a href={`/categories/${encodeURIComponent(effectiveCategory)}/`}>{effectiveCategory}</a>
+										<span>·</span>
+										<span>约 {wordCount.toLocaleString('zh-CN')} 字</span>
+									</>
 								)
 							}
 						</div>
-						<h1>{title}</h1>
-						<hr />
-					</div>
+						{
+							updatedDate && (
+								<p class="updated">
+									最后更新于 <time datetime={updatedDate.toISOString()}>{formatDate(updatedDate)}</time>
+								</p>
+							)
+						}
+					</header>
 					<slot />
 				</div>
+				{
+					post && (
+						<footer class="article-footer-tags" aria-label="Post tags">
+							<a class="article-footer-tag article-footer-tag--category" href={`/categories/${encodeURIComponent(effectiveCategory)}/`}>
+								# {effectiveCategory}
+							</a>
+							{footerTags.map((tag) => (
+								<a class="article-footer-tag" href={`/tags/${encodeURIComponent(tag)}/`}>
+									# {tag}
+								</a>
+							))}
+						</footer>
+					)
+				}
 			</article>
+				{
+					post && hasAdjacentPosts && (
+						<nav
+							class:list={[
+								'article-neighbors',
+								hasBothAdjacentPosts ? 'article-neighbors--split' : 'article-neighbors--single',
+							]}
+							aria-label="Adjacent posts"
+						>
+							{previousPost && (
+								<div class="article-neighbor-slot article-neighbor-slot--prev">
+									<a class="article-neighbor-link" href={postUrl(previousPost)}>
+										<span class="article-neighbor-icon article-neighbor-icon--prev" aria-hidden="true"></span>
+										<span class="article-neighbor-title">{previousPost.data.title}</span>
+									</a>
+								</div>
+							)}
+							{nextPost && (
+								<div class="article-neighbor-slot article-neighbor-slot--next">
+									<a class="article-neighbor-link" href={postUrl(nextPost)}>
+										<span class="article-neighbor-title">{nextPost.data.title}</span>
+										<span class="article-neighbor-icon article-neighbor-icon--next" aria-hidden="true"></span>
+									</a>
+								</div>
+							)}
+						</nav>
+					)
+				}
+				{post && <Comments title={title} />}
+			</section>
+
+			<Sidebar posts={posts} side="right" relatedPosts={related} showArchive={false} />
 		</main>
+		<BackToTop />
 		<Footer />
 	</body>
 </html>
+
+<style>
+	.article-shell {
+		align-items: stretch;
+	}
+
+	:global(.article-shell .article-left),
+	:global(.article-shell .right-rail) {
+		align-self: stretch;
+	}
+
+	.article-panel {
+		min-width: 0;
+		margin-top: 22.5px;
+	}
+
+	.article-main {
+		min-width: 0;
+	}
+
+	.article-hero {
+		display: block;
+		width: 100%;
+		aspect-ratio: 2.8 / 1;
+		object-fit: cover;
+		border-radius: 0;
+	}
+
+	.article-content {
+		padding: 22.5px 22.5px 0;
+		font-size: 16px;
+		line-height: 24px;
+	}
+
+	.article-header {
+		margin: 0 0 15px;
+		padding: 0;
+		border-bottom: 0;
+	}
+
+	.article-header h1 {
+		margin: 0 0 15px;
+		font-size: 22.5px;
+		font-weight: 400;
+		line-height: 25.3125px;
+	}
+
+	.article-meta,
+	.updated {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		align-items: center;
+		margin: 0;
+		color: var(--text-muted);
+		font-size: 15px;
+		line-height: 22.5px;
+	}
+
+	.updated {
+		margin-top: 8px;
+	}
+
+	.article-footer-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		align-items: flex-start;
+		padding: 22.5px;
+	}
+
+	.article-footer-tag {
+		display: block;
+		padding: 3px 10px;
+		border-radius: 1000px;
+		color: var(--text-muted);
+		font-size: 13px;
+		line-height: 19.5px;
+	}
+
+	.article-footer-tag--category {
+		color: var(--text-strong);
+	}
+
+	.article-footer-tag:hover {
+		color: var(--accent);
+	}
+
+	.article-neighbors {
+		display: flex;
+		min-width: 0;
+		color: var(--text-muted);
+		font-size: 15px;
+		line-height: 22.5px;
+	}
+
+	.article-neighbor-slot {
+		display: flex;
+		min-width: 0;
+	}
+
+	.article-neighbors--split .article-neighbor-slot {
+		flex: 1 1 50%;
+		max-width: 50%;
+	}
+
+	.article-neighbors--single .article-neighbor-slot {
+		flex: 1 1 100%;
+		max-width: 100%;
+	}
+
+	.article-neighbor-slot--prev {
+		justify-content: flex-start;
+		text-align: left;
+	}
+
+	.article-neighbor-slot--next {
+		justify-content: flex-end;
+		text-align: right;
+	}
+
+	.article-neighbor-link {
+		display: flex;
+		align-items: center;
+		max-width: 100%;
+		min-width: 0;
+		padding: 0 7.5px;
+		color: var(--text-muted);
+	}
+
+	.article-neighbor-link:hover,
+	.article-neighbor-link:hover .article-neighbor-title,
+	.article-neighbor-link:hover .article-neighbor-icon {
+		color: var(--accent);
+	}
+
+	.article-neighbor-title {
+		display: -webkit-box;
+		min-width: 0;
+		overflow: hidden;
+		color: var(--text-muted);
+		font-size: 14px;
+		font-weight: 600;
+		line-height: 17.5px;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+	}
+
+	.article-neighbor-icon {
+		display: block;
+		flex: 0 0 auto;
+		color: var(--text-muted);
+		font-size: 14px;
+		line-height: 17.5px;
+	}
+
+	.article-neighbor-icon::before {
+		display: block;
+		line-height: 17.5px;
+	}
+
+	.article-neighbor-icon--prev {
+		width: 13px;
+	}
+
+	.article-neighbor-icon--prev::before {
+		content: "\2190";
+	}
+
+	.article-neighbor-icon--next {
+		width: 9px;
+	}
+
+	.article-neighbor-icon--next::before {
+		content: "\2192";
+	}
+
+	.article-neighbor-slot--prev .article-neighbor-icon {
+		margin-right: 7px;
+	}
+
+	.article-neighbor-slot--next .article-neighbor-icon {
+		margin-left: 7px;
+	}
+
+	.prose :global(p),
+	.prose :global(ul),
+	.prose :global(ol),
+	.prose :global(blockquote),
+	.prose :global(pre),
+	.prose :global(table) {
+		margin: 12px 0 24px;
+		font-size: 16px;
+		line-height: 24px;
+	}
+
+	.prose :global(h2),
+	.prose :global(h3),
+	.prose :global(h4) {
+		padding-top: 0;
+		font-weight: 600;
+	}
+
+	.prose :global(h2) {
+		margin: 24px 0 12px;
+		font-size: 24px;
+		line-height: 32px;
+	}
+
+	.prose :global(h3) {
+		margin: 24px 0 12px;
+		font-size: 20px;
+		line-height: 28px;
+	}
+
+	.prose :global(h4) {
+		margin: 20px 0 10px;
+		font-size: 18px;
+		line-height: 26px;
+	}
+
+	.prose :global(ul),
+	.prose :global(ol) {
+		padding-left: 24px;
+	}
+
+	.prose :global(li) {
+		margin: 6px 0;
+		font-size: 16px;
+		line-height: 24px;
+	}
+
+	.prose :global(a) {
+		border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+	}
+
+	.prose :global(img) {
+		display: block;
+		margin: 1.5rem auto;
+		border-radius: var(--radius);
+	}
+
+	@media (max-width: 1120px) {
+		.article-shell {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		.article-main {
+			order: 1;
+		}
+
+		:global(.article-shell .article-left),
+		:global(.article-shell .right-rail) {
+			align-self: stretch;
+			display: flex;
+		}
+
+		:global(.article-shell .article-left) {
+			order: 2;
+		}
+
+		:global(.article-shell .right-rail) {
+			order: 3;
+		}
+	}
+
+	@media (max-width: 760px) {
+		.article-shell {
+			align-items: stretch;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.article-content {
+			padding: 22.5px 22.5px 0;
+		}
+	}
+</style>

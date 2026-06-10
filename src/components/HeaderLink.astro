@@ -4,21 +4,54 @@ import type { HTMLAttributes } from 'astro/types';
 type Props = HTMLAttributes<'a'>;
 
 const { href, class: className, ...props } = Astro.props;
-const pathname = Astro.url.pathname.replace(import.meta.env.BASE_URL, '');
-const subpath = pathname.match(/[^\/]+/g);
-const isActive = href === pathname || href === '/' + (subpath?.[0] || '');
+const base = import.meta.env.BASE_URL;
+const pathname =
+	base !== '/' && Astro.url.pathname.startsWith(base)
+		? Astro.url.pathname.slice(base.length - 1)
+		: Astro.url.pathname;
+
+function normalizePath(value: string) {
+	const path = value.startsWith('/') ? value : `/${value}`;
+	return path.endsWith('/') ? path : `${path}/`;
+}
+
+const normalized = normalizePath(pathname);
+const normalizedHref = normalizePath(String(href));
+const isActive = normalizedHref === normalized || (normalizedHref !== '/' && normalized.startsWith(normalizedHref));
 ---
 
 <a href={href} class:list={[className, { active: isActive }]} {...props}>
 	<slot />
 </a>
+
 <style>
 	a {
-		display: inline-block;
+		display: inline-flex;
+		align-items: center;
+		height: 57px;
+		padding: 15px 12px;
+		border-radius: 0;
+		color: var(--text);
+		font-size: 15px;
+		font-weight: 400;
+		line-height: 22.5px;
+		white-space: nowrap;
 		text-decoration: none;
+		transition:
+			background-color 160ms ease,
+			box-shadow 160ms ease,
+			color 160ms ease;
 	}
+
+	a:hover,
+	a:focus-visible,
 	a.active {
-		font-weight: bolder;
-		text-decoration: underline;
+		background: var(--icon-hover-bg);
+		box-shadow: inset 0 -2px 0 var(--accent);
+		color: var(--text-strong);
+	}
+
+	a:focus-visible {
+		outline: 0;
 	}
 </style>

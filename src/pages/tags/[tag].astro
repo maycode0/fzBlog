@@ -1,0 +1,58 @@
+---
+import { getCollection } from 'astro:content';
+import BackToTop from '../../components/BackToTop.astro';
+import BaseHead from '../../components/BaseHead.astro';
+import Footer from '../../components/Footer.astro';
+import Header from '../../components/Header.astro';
+import PostCard from '../../components/PostCard.astro';
+import Sidebar from '../../components/Sidebar.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../../consts';
+import { countTags, inferTags, sortPosts } from '../../lib/blog';
+
+export async function getStaticPaths() {
+	const posts = sortPosts(await getCollection('blog'));
+	return countTags(posts).map((tag) => ({
+		params: { tag: tag.name },
+		props: { tag: tag.name },
+	}));
+}
+
+const { tag } = Astro.props;
+const posts = sortPosts(await getCollection('blog'));
+const filtered = posts.filter((post) => (post.data.tags?.length ? post.data.tags : inferTags(post)).includes(tag));
+---
+
+<!doctype html>
+<html lang="zh-CN" id="top">
+	<head>
+		<BaseHead title={`# ${tag} | ${SITE_TITLE}`} description={SITE_DESCRIPTION} />
+	</head>
+	<body>
+		<Header />
+		<main class="page-shell">
+			<Sidebar posts={posts} side="left" />
+			<section class="content-stack">
+				<header class="panel page-heading">
+					<h1># {tag}</h1>
+					<p>共 {filtered.length} 篇文章。</p>
+				</header>
+				{filtered.map((post) => <PostCard post={post} />)}
+			</section>
+			<Sidebar posts={posts} side="right" />
+		</main>
+		<BackToTop />
+		<Footer />
+	</body>
+</html>
+
+<style>
+	.page-heading h1 {
+		margin: 0 0 8px;
+		font-size: 2rem;
+	}
+
+	.page-heading p {
+		margin: 0;
+		color: var(--muted);
+	}
+</style>

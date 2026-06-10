@@ -1,0 +1,253 @@
+---
+import { SITE_TITLE } from '../consts';
+
+interface Props {
+	title: string;
+}
+
+const { title } = Astro.props;
+const shortname = import.meta.env.PUBLIC_DISQUS_SHORTNAME || '';
+const fullMode = import.meta.env.PUBLIC_DISQUS_FULL_MODE === 'true';
+const disqusApi = import.meta.env.PUBLIC_DISQUSJS_API || '';
+const disqusApiKey = import.meta.env.PUBLIC_DISQUSJS_API_KEY || '';
+const siteName = import.meta.env.PUBLIC_DISQUSJS_SITE_NAME || SITE_TITLE;
+const pageUrl = Astro.url.href;
+const pageIdentifier = Astro.url.pathname.replace(/\/$/, '') || '/';
+---
+
+<section
+	class="comments-panel"
+	aria-label="评论"
+	data-comments-root
+	data-shortname={shortname}
+	data-full-mode={fullMode ? 'true' : 'false'}
+	data-api={disqusApi}
+	data-apikey={disqusApiKey}
+	data-site-name={siteName}
+	data-page-url={pageUrl}
+	data-page-identifier={pageIdentifier}
+	data-page-title={title}
+>
+	<section id="dsqjs" class="comments-inner">
+		<div id="disqus_thread"></div>
+		<div class="comments-status" data-comment-status>
+			<p>
+				评论完整模式加载中... 如果长时间无法加载，请针对 disq.us | disquscdn.com | disqus.com 启用代理，或切换至
+				<button type="button" data-basic-mode>评论基础模式</button>
+			</p>
+		</div>
+		<div class="comments-basic" data-basic-container hidden></div>
+		<footer class="comments-footer">
+			<span>Powered by</span>
+			<a href="https://disqus.com" rel="noopener noreferrer" target="_blank">Disqus</a>
+			<span>&amp;</span>
+			<a href="https://disqusjs.skk.moe" rel="noopener noreferrer" target="_blank">DisqusJS</a>
+		</footer>
+	</section>
+</section>
+
+<script>
+	let activeCommentsObserver: MutationObserver | undefined;
+
+	function initCommentsPanel() {
+		activeCommentsObserver?.disconnect();
+		activeCommentsObserver = undefined;
+
+		const root = document.querySelector<HTMLElement>('[data-comments-root]');
+		if (!root || root.dataset.commentsBound === 'true') return;
+		root.dataset.commentsBound = 'true';
+
+		const status = root.querySelector<HTMLElement>('[data-comment-status]');
+		const basicButton = root.querySelector<HTMLButtonElement>('[data-basic-mode]');
+		const basicContainer = root.querySelector<HTMLElement>('[data-basic-container]');
+		const thread = root.querySelector<HTMLElement>('#disqus_thread');
+		const shortname = root.dataset.shortname || '';
+		const fullMode = root.dataset.fullMode === 'true';
+		const pageUrl = root.dataset.pageUrl || location.href;
+		const pageIdentifier = root.dataset.pageIdentifier || location.pathname;
+		const pageTitle = root.dataset.pageTitle || document.title;
+		const api = root.dataset.api || '';
+		const apikey = root.dataset.apikey || '';
+		const siteName = root.dataset.siteName || document.title;
+
+		const setStatus = (message: string) => {
+			if (!status) return;
+			status.hidden = false;
+			status.dataset.state = 'message';
+			status.textContent = message;
+		};
+
+		const disqusConfig = function (this: { page: { url: string; identifier: string; title: string } }) {
+			this.page.url = pageUrl;
+			this.page.identifier = pageIdentifier;
+			this.page.title = pageTitle;
+		};
+
+		const hideStatusWhenLoaded = () => {
+			if (!thread || !status) return;
+			activeCommentsObserver = new MutationObserver(() => {
+				if (thread.querySelector('iframe')) {
+					status.hidden = true;
+					activeCommentsObserver?.disconnect();
+					activeCommentsObserver = undefined;
+				}
+			});
+			activeCommentsObserver.observe(thread, { childList: true, subtree: true });
+		};
+
+		const loadDisqus = () => {
+			if (!shortname) {
+				setStatus('评论功能需要配置 PUBLIC_DISQUS_SHORTNAME 后启用。');
+				return;
+			}
+
+			if (!fullMode) {
+				setStatus('评论完整模式已关闭。');
+				return;
+			}
+
+			(window as any).disqus_config = disqusConfig;
+			hideStatusWhenLoaded();
+
+			const disqus = (window as any).DISQUS;
+			if (disqus && typeof disqus.reset === 'function') {
+				disqus.reset({
+					reload: true,
+					config: disqusConfig,
+				});
+				return;
+			}
+
+			if (document.getElementById('dsq-embed-scr')) return;
+			const script = document.createElement('script');
+			script.id = 'dsq-embed-scr';
+			script.src = `https://${shortname}.disqus.com/embed.js`;
+			script.async = true;
+			script.dataset.timestamp = String(Date.now());
+			script.onerror = () => {
+				if (status) status.hidden = false;
+			};
+			document.body.appendChild(script);
+		};
+
+		const loadBasicMode = async () => {
+			if (!basicContainer) return;
+			if (!shortname || !api || !apikey) {
+				basicContainer.hidden = false;
+				basicContainer.textContent = '评论基础模式需要配置 PUBLIC_DISQUSJS_API 和 PUBLIC_DISQUSJS_API_KEY。';
+				return;
+			}
+
+			if (status) status.hidden = true;
+			if (thread) thread.hidden = true;
+			basicContainer.hidden = false;
+			basicContainer.textContent = '评论基础模式加载中...';
+
+			if (!document.querySelector('link[data-disqusjs-style]')) {
+				const style = document.createElement('link');
+				style.dataset.disqusjsStyle = 'true';
+				style.rel = 'stylesheet';
+				style.href = 'https://cdn.jsdelivr.net/npm/disqusjs@1.3/dist/browser/styles/disqusjs.min.css';
+				document.head.appendChild(style);
+			}
+
+			if (!(window as any).DisqusJS) {
+				await new Promise<void>((resolve, reject) => {
+					const script = document.createElement('script');
+					script.src = 'https://cdn.jsdelivr.net/npm/disqusjs@1.3/dist/browser/disqusjs.es2015.umd.min.js';
+					script.async = true;
+					script.onload = () => resolve();
+					script.onerror = () => reject(new Error('DisqusJS failed to load'));
+					document.body.appendChild(script);
+				}).catch(() => {
+					basicContainer.textContent = '评论基础模式加载失败，请稍后重试。';
+				});
+			}
+
+			if (!(window as any).DisqusJS) return;
+			basicContainer.textContent = '';
+			new (window as any).DisqusJS({
+				shortname,
+				siteName,
+				identifier: pageIdentifier,
+				url: pageUrl,
+				title: pageTitle,
+				api,
+				apikey,
+			});
+		};
+
+		basicButton?.addEventListener('click', loadBasicMode);
+		loadDisqus();
+	}
+
+	document.addEventListener('astro:page-load', initCommentsPanel);
+	initCommentsPanel();
+</script>
+
+<style>
+	.comments-panel {
+		min-width: 0;
+		padding: 22.5px;
+		border-radius: var(--radius);
+		background: var(--surface);
+		box-shadow: var(--shadow);
+	}
+
+	.comments-inner {
+		min-height: 120px;
+	}
+
+	#disqus_thread {
+		min-height: 0;
+	}
+
+	.comments-status,
+	.comments-basic {
+		color: var(--text);
+		font-size: 15px;
+		line-height: 22.5px;
+	}
+
+	.comments-status p {
+		margin: 0;
+	}
+
+	.comments-status button {
+		display: inline-flex;
+		align-items: center;
+		border: 0;
+		border-radius: 4px;
+		background: transparent;
+		color: var(--accent);
+		cursor: pointer;
+		font: inherit;
+		padding: 0 2px;
+	}
+
+	.comments-status button:hover {
+		color: var(--text-strong);
+	}
+
+	.comments-basic {
+		color: var(--text-muted);
+	}
+
+	.comments-footer {
+		display: flex;
+		gap: 5px;
+		align-items: center;
+		margin-top: 12px;
+		color: var(--text-muted);
+		font-size: 16px;
+		line-height: 24px;
+	}
+
+	.comments-footer a {
+		color: var(--text-muted);
+	}
+
+	.comments-footer a:hover {
+		color: var(--accent);
+	}
+</style>

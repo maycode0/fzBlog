@@ -1,0 +1,71 @@
+---
+import { getCollection } from 'astro:content';
+import BackToTop from '../../components/BackToTop.astro';
+import BaseHead from '../../components/BaseHead.astro';
+import Footer from '../../components/Footer.astro';
+import Header from '../../components/Header.astro';
+import Sidebar from '../../components/Sidebar.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../../consts';
+import { countTags, sortPosts } from '../../lib/blog';
+
+const posts = sortPosts(await getCollection('blog'));
+const tagCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
+const tags = countTags(posts).sort((a, b) => tagCollator.compare(a.name, b.name));
+const counts = tags.map((tag) => tag.count);
+const minCount = Math.min(...counts);
+const maxCount = Math.max(...counts);
+
+function tagStyle(count: number) {
+	const weight = maxCount === minCount ? 0 : (count - minCount) / (maxCount - minCount);
+	const from = [163, 167, 171];
+	const to = [87, 96, 116];
+	const color = from.map((value, index) => Math.round(value + (to[index] - value) * weight));
+	const fontSize = 1 + weight * 0.89;
+	return `font-size: ${fontSize.toFixed(3)}rem; color: rgb(${color.join(', ')});`;
+}
+---
+
+<!doctype html>
+<html lang="zh-CN" id="top">
+	<head>
+		<BaseHead title={`标签 | ${SITE_TITLE}`} description={SITE_DESCRIPTION} />
+	</head>
+	<body>
+		<Header />
+		<main class="page-shell">
+			<Sidebar posts={posts} side="left" />
+			<section class="content-stack">
+				<section class="panel tag-index" aria-label="标签云">
+					<div class="tag-cloud-index">
+						{tags.map((tag) => <a href={`/tags/${encodeURIComponent(tag.name)}/`} style={tagStyle(tag.count)}>{tag.name}</a>)}
+					</div>
+				</section>
+			</section>
+			<Sidebar posts={posts} side="right" />
+		</main>
+		<BackToTop />
+		<Footer />
+	</body>
+</html>
+
+<style>
+	.tag-index {
+		padding: 22.5px;
+	}
+
+	.tag-cloud-index {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+	}
+
+	.tag-cloud-index a {
+		display: block;
+		padding: 15px;
+		line-height: 1;
+	}
+
+	.tag-cloud-index a:hover {
+		color: var(--accent) !important;
+	}
+</style>

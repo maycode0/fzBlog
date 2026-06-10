@@ -2,6 +2,8 @@
 title: 'Third post'
 description: 'Lorem ipsum dolor sit amet'
 pubDate: 'Jul 22 2022'
+category: '分享境'
+tags: ['阅读', '记录']
 heroImage: '../../assets/blog-placeholder-2.jpg'
 ---
 

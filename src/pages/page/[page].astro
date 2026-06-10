@@ -1,0 +1,52 @@
+---
+import { getCollection } from 'astro:content';
+import BackToTop from '../../components/BackToTop.astro';
+import BaseHead from '../../components/BaseHead.astro';
+import Footer from '../../components/Footer.astro';
+import Header from '../../components/Header.astro';
+import Pagination from '../../components/Pagination.astro';
+import PostCard from '../../components/PostCard.astro';
+import Sidebar from '../../components/Sidebar.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../../consts';
+import { pagePosts, sortPosts, totalPages } from '../../lib/blog';
+
+export async function getStaticPaths() {
+	const posts = sortPosts(await getCollection('blog'));
+	const pages = totalPages(posts);
+
+	return Array.from({ length: Math.max(0, pages - 1) }, (_, index) => {
+		const currentPage = index + 2;
+		return {
+			params: { page: String(currentPage) },
+			props: {
+				currentPage,
+				posts,
+				visiblePosts: pagePosts(posts, currentPage),
+				total: pages,
+			},
+		};
+	});
+}
+
+const { currentPage, posts, visiblePosts, total } = Astro.props;
+---
+
+<!doctype html>
+<html lang="zh-CN" id="top">
+	<head>
+		<BaseHead title={`第 ${currentPage} 页 | ${SITE_TITLE}`} description={SITE_DESCRIPTION} />
+	</head>
+	<body>
+		<Header />
+		<main class="page-shell">
+			<Sidebar posts={posts} side="left" />
+			<section class="content-stack" aria-label="文章列表">
+				{visiblePosts.map((post) => <PostCard post={post} />)}
+				<Pagination currentPage={currentPage} totalPages={total} />
+			</section>
+			<Sidebar posts={posts} side="right" />
+		</main>
+		<BackToTop />
+		<Footer />
+	</body>
+</html>
