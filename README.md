@@ -164,6 +164,8 @@ PUBLIC_DISQUSJS_SITE_NAME=FZ Blog
 
 ## 部署
 
+详细的自有服务器部署教程见 [DEPLOY.md](./DEPLOY.md)。
+
 生产构建：
 
 ```sh
