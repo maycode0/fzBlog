@@ -30,7 +30,7 @@ const pageIdentifier = Astro.url.pathname.replace(/\/$/, '') || '/';
 >
 	<section id="dsqjs" class="comments-inner">
 		<div id="disqus_thread"></div>
-		<div class="comments-status" data-comment-status>
+		<div class="comments-status" data-comment-status hidden>
 			<p>
 				评论完整模式加载中... 如果长时间无法加载，请针对 disq.us | disquscdn.com | disqus.com 启用代理，或切换至
 				<button type="button" data-basic-mode>评论基础模式</button>
@@ -47,14 +47,31 @@ const pageIdentifier = Astro.url.pathname.replace(/\/$/, '') || '/';
 </section>
 
 <script>
+	let activeCommentsRoot: HTMLElement | undefined;
 	let activeCommentsObserver: MutationObserver | undefined;
+	let activeCommentsFallbackTimer: number | undefined;
 
-	function initCommentsPanel() {
+	function clearCommentsLoadingState() {
 		activeCommentsObserver?.disconnect();
 		activeCommentsObserver = undefined;
+		if (activeCommentsFallbackTimer) {
+			window.clearTimeout(activeCommentsFallbackTimer);
+			activeCommentsFallbackTimer = undefined;
+		}
+	}
 
+	function initCommentsPanel() {
 		const root = document.querySelector<HTMLElement>('[data-comments-root]');
-		if (!root || root.dataset.commentsBound === 'true') return;
+		if (!root) {
+			clearCommentsLoadingState();
+			activeCommentsRoot = undefined;
+			return;
+		}
+
+		if (root === activeCommentsRoot && root.dataset.commentsBound === 'true') return;
+
+		clearCommentsLoadingState();
+		activeCommentsRoot = root;
 		root.dataset.commentsBound = 'true';
 
 		const status = root.querySelector<HTMLElement>('[data-comment-status]');
@@ -72,6 +89,7 @@ const pageIdentifier = Astro.url.pathname.replace(/\/$/, '') || '/';
 
 		const setStatus = (message: string) => {
 			if (!status) return;
+			clearCommentsLoadingState();
 			status.hidden = false;
 			status.dataset.state = 'message';
 			status.textContent = message;
@@ -85,12 +103,24 @@ const pageIdentifier = Astro.url.pathname.replace(/\/$/, '') || '/';
 
 		const hideStatusWhenLoaded = () => {
 			if (!thread || !status) return;
+			const syncLoadedState = () => {
+				if (!thread.querySelector('iframe')) return false;
+				status.hidden = true;
+				clearCommentsLoadingState();
+				return true;
+			};
+
+			status.hidden = true;
+			status.dataset.state = 'loading';
+			if (syncLoadedState()) return;
+
+			activeCommentsFallbackTimer = window.setTimeout(() => {
+				activeCommentsFallbackTimer = undefined;
+				if (!syncLoadedState()) status.hidden = false;
+			}, 7000);
+
 			activeCommentsObserver = new MutationObserver(() => {
-				if (thread.querySelector('iframe')) {
-					status.hidden = true;
-					activeCommentsObserver?.disconnect();
-					activeCommentsObserver = undefined;
-				}
+				syncLoadedState();
 			});
 			activeCommentsObserver.observe(thread, { childList: true, subtree: true });
 		};
