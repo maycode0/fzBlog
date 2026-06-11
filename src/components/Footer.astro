@@ -1,13 +1,14 @@
 ---
-import { SITE_TITLE } from '../consts';
+import { siteConfig } from '../config';
 
 const today = new Date();
+const { title } = siteConfig;
 ---
 
 <footer class="site-footer">
 	<p>
 		Copyright &copy; 2018 - {today.getFullYear()}
-		<a href="/">{SITE_TITLE}</a>
+		<a href="/">{title}</a>
 	</p>
 	<p>
 		Powered by <a href="https://astro.build/">Astro</a> &amp; designed for a quiet reading experience.

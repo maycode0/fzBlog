@@ -1,5 +1,6 @@
 ---
 import type { CollectionEntry } from 'astro:content';
+import { siteConfig } from '../config';
 import {
 	archiveYears,
 	countCategories,
@@ -23,6 +24,8 @@ const categories = countCategories(posts);
 const tags = countTags(posts).slice(0, 12);
 const years = archiveYears(posts);
 const recentPosts = posts.slice(0, 4);
+const { author } = siteConfig;
+const avatarAlt = `${author.name} 的头像`;
 ---
 
 {
@@ -30,9 +33,15 @@ const recentPosts = posts.slice(0, 4);
 		<aside class="side-stack left-rail" aria-label="博客信息">
 			<div class="sidebar-sticky">
 				<section class="panel profile">
-					<div class="avatar">FZ</div>
-					<h2>FZ</h2>
-					<p>把长期折腾写成可以复盘的记录</p>
+					{
+						author.avatarSrc ? (
+							<img class="avatar avatar-image" src={author.avatarSrc} alt={avatarAlt} />
+						) : (
+							<div class="avatar">{author.avatarText}</div>
+						)
+					}
+					<h2>{author.name}</h2>
+					<p>{author.signature}</p>
 					<div class="stats">
 						<div>
 							<strong>{stats.posts}</strong>
@@ -80,9 +89,15 @@ const recentPosts = posts.slice(0, 4);
 	) : side === 'article-left' ? (
 		<aside class="side-stack left-rail article-left" aria-label="文章辅助导航">
 			<section class="panel profile">
-				<div class="avatar">FZ</div>
-				<h2>FZ</h2>
-				<p>把长期折腾写成可以复盘的记录</p>
+				{
+					author.avatarSrc ? (
+						<img class="avatar avatar-image" src={author.avatarSrc} alt={avatarAlt} />
+					) : (
+						<div class="avatar">{author.avatarText}</div>
+					)
+				}
+				<h2>{author.name}</h2>
+				<p>{author.signature}</p>
 				<div class="stats">
 					<div>
 						<strong>{stats.posts}</strong>
@@ -303,6 +318,12 @@ const recentPosts = posts.slice(0, 4);
 		color: #0f1722;
 		font-size: 1.6rem;
 		font-weight: 700;
+	}
+
+	.avatar-image {
+		display: block;
+		object-fit: cover;
+		background: var(--surface-2);
 	}
 
 	.profile h2 {

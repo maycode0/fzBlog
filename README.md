@@ -57,6 +57,47 @@ src/pages/              路由页面
 src/styles/global.css   全局主题和布局样式
 ```
 
+## 站点配置
+
+博客名称、描述、导航栏圆形标识、作者信息、签名、头像和 GitHub 链接集中在 `src/config.ts`：
+
+```ts
+export const siteConfig = {
+	title: '泛舟 \' Blog',
+	description: '闲言碎语，学习记录，麻瓜成长',
+	brandMark: {
+		text: '舟',
+		imageSrc: '',
+		background:
+			'radial-gradient(circle at 32% 30%, #f6d88c 0 16%, transparent 17%), linear-gradient(135deg, #13a8d8, #465a76)',
+		color: '#0f1722',
+	},
+	author: {
+		name: '泛舟',
+		avatarText: '',
+		avatarSrc: '/avatar.jpg',
+		signature: '驾一叶扁舟',
+	},
+	social: {
+		github: 'https://github.com/maycode0',
+	},
+};
+```
+
+- `title`：站点名称，会用于导航栏、页面标题、RSS 和 SEO 信息。
+- `description`：站点描述，会用于首页、归档、标签等页面的 SEO 描述。
+- `brandMark.text`：导航栏左侧圆形标识里的文字。
+- `brandMark.imageSrc`：导航栏左侧圆形标识图片。留空时显示 `brandMark.text`。
+- `brandMark.background`：导航栏圆形标识背景，支持普通颜色或 CSS 渐变。
+- `brandMark.color`：导航栏圆形标识文字颜色。
+- `author.name`：侧边栏显示的作者昵称。
+- `author.avatarText`：没有配置头像图片时，圆形头像里显示的文字。
+- `author.avatarSrc`：侧边栏头像图片地址。可以把图片放到 `public/avatar.jpg`，然后填 `'/avatar.jpg'`。
+- `author.signature`：侧边栏昵称下面的个人签名。
+- `social.github`：右上角 GitHub 图标链接；留空字符串会隐藏这个入口。
+
+`src/consts.ts` 会从 `src/config.ts` 导出兼容常量，旧页面仍可以继续使用 `SITE_TITLE` 和 `SITE_DESCRIPTION`。
+
 ## 写文章
 
 文章放在 `src/content/blog/`，支持 `.md` 和 `.mdx`。
