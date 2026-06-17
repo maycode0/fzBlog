@@ -321,7 +321,7 @@ sudo chmod -R 755 /var/www/fzblog
 
 ## 九、部署方式 A：本地构建后上传
 
-这种方式适合在 Windows 本地写博客，然后上传静态文件。
+这种方式适合在 Windows 本地写博客，然后上传静态文件。服务器不需要访问 GitHub，也不需要在服务器上安装 Node.js。
 
 在本地项目目录执行：
 
@@ -335,19 +335,63 @@ npm run build
 - `npm install`：安装依赖。
 - `npm run build`：生成生产文件到 `dist/`。
 
-清空服务器旧文件：
+推荐把 `dist/` 打包成一个压缩包上传：
 
 ```sh
-ssh root@117.72.197.49 "rm -rf /var/www/fzblog/*"
+tar -czf fzblog-dist.tar.gz -C dist .
+scp fzblog-dist.tar.gz root@117.72.197.49:/tmp/fzblog-dist.tar.gz
 ```
 
-上传构建结果：
+然后在服务器执行部署脚本：
 
 ```sh
-scp -r dist/* root@117.72.197.49:/var/www/fzblog/
+ssh root@117.72.197.49 "bash /opt/deploy-fzblog.sh"
 ```
 
-注意上传的是 `dist/*`，不是整个 `dist` 文件夹。
+`/opt/deploy-fzblog.sh` 的内容见“十五、推荐部署脚本”。
+
+如果你已经在 Windows 的 SSH 配置里配置了服务器别名，例如 `jd`，命令可以写成：
+
+```sh
+scp fzblog-dist.tar.gz jd:/tmp/fzblog-dist.tar.gz
+ssh jd "bash /opt/deploy-fzblog.sh"
+```
+
+也可以在项目根目录创建 `deploy.bat`，以后双击或在命令行执行它即可发布：
+
+```bat
+@echo off
+
+echo [1/4] Build...
+call npm run build
+if errorlevel 1 pause & exit /b 1
+
+echo [2/4] Pack...
+if exist fzblog-dist.tar.gz del fzblog-dist.tar.gz
+tar -czf fzblog-dist.tar.gz -C dist .
+if errorlevel 1 pause & exit /b 1
+
+echo [3/4] Upload...
+scp fzblog-dist.tar.gz jd:/tmp/fzblog-dist.tar.gz
+if errorlevel 1 pause & exit /b 1
+
+echo Cleaning local archive...
+if exist fzblog-dist.tar.gz del fzblog-dist.tar.gz
+
+echo [4/4] Deploy on server...
+ssh jd "bash /opt/deploy-fzblog.sh"
+if errorlevel 1 pause & exit /b 1
+
+echo Done.
+pause
+```
+
+注意：
+
+- `.bat` 里执行 `npm run build` 必须写成 `call npm run build`，否则后面的 `tar`、`scp` 不会继续执行。
+- `fzblog-dist.tar.gz` 这个文件名必须和服务器脚本里的 `ARCHIVE="/tmp/fzblog-dist.tar.gz"` 保持一致。
+- `jd` 是 SSH 别名。如果没有配置别名，就改成 `root@117.72.197.49` 或 `root@blog.example.com`。
+- 上传完成后本地压缩包可以删除，服务器端脚本会使用 `/tmp/fzblog-dist.tar.gz`。
 
 正确目录结构：
 
@@ -364,11 +408,11 @@ scp -r dist/* root@117.72.197.49:/var/www/fzblog/
 /var/www/fzblog/dist/index.html
 ```
 
-如果出现错误目录结构，说明上传命令写成了 `scp -r dist ...`，需要改成 `scp -r dist/* ...`。
+如果出现错误目录结构，说明把整个 `dist` 文件夹放进了网站目录。使用本文的 `tar -czf fzblog-dist.tar.gz -C dist .` 可以避免这个问题。
 
 ## 十、部署方式 B：服务器拉 Git 构建
 
-这种方式适合服务器直接从 GitHub 拉代码并构建。
+这种方式适合服务器可以稳定访问 GitHub 和 npm 源的情况。如果服务器无法访问 GitHub，使用“部署方式 A：本地构建后上传”。
 
 克隆仓库：
 
@@ -645,7 +689,7 @@ TCP 443
 
 ## 十五、推荐部署脚本
 
-如果你采用“服务器拉 Git 构建”的方式，可以创建脚本：
+如果你采用“本地构建后上传”的方式，服务器端只需要一个解压部署脚本：
 
 ```sh
 sudo nano /opt/deploy-fzblog.sh
@@ -657,32 +701,40 @@ sudo nano /opt/deploy-fzblog.sh
 #!/usr/bin/env bash
 set -e
 
-APP_DIR="/opt/fzblog"
+ARCHIVE="/tmp/fzblog-dist.tar.gz"
 WEB_DIR="/var/www/fzblog"
 
-cd "$APP_DIR"
-git pull
-npm install
-npm run build
+echo "[1/4] Checking archive..."
+if [ ! -f "$ARCHIVE" ]; then
+  echo "ERROR: archive not found: $ARCHIVE"
+  exit 1
+fi
 
-sudo rm -rf "$WEB_DIR"/*
-sudo cp -r dist/* "$WEB_DIR"/
-sudo chown -R www-data:www-data "$WEB_DIR"
-sudo chmod -R 755 "$WEB_DIR"
-sudo systemctl reload nginx
+echo "[2/4] Cleaning old files..."
+mkdir -p "$WEB_DIR"
+find "$WEB_DIR" -mindepth 1 -delete
+
+echo "[3/4] Extracting new site..."
+tar -xzf "$ARCHIVE" -C "$WEB_DIR"
+chown -R www-data:www-data "$WEB_DIR"
+chmod -R 755 "$WEB_DIR"
+
+echo "[4/4] Checking nginx..."
+nginx -t
+systemctl reload nginx
+
+echo "Deploy finished."
 ```
 
 脚本说明：
 
 - `#!/usr/bin/env bash`：使用 bash 执行脚本。
 - `set -e`：任何一步失败就立即停止。
-- `APP_DIR`：源码目录。
+- `ARCHIVE`：Windows 上传到服务器的压缩包路径。
 - `WEB_DIR`：Nginx 网站目录。
-- `git pull`：拉取最新代码。
-- `npm install`：安装或更新依赖。
-- `npm run build`：重新生成静态文件。
-- `rm -rf "$WEB_DIR"/*`：清理旧文件。
-- `cp -r dist/* "$WEB_DIR"/`：复制新文件。
+- `find "$WEB_DIR" -mindepth 1 -delete`：清理旧文件，但保留网站目录本身。
+- `tar -xzf "$ARCHIVE" -C "$WEB_DIR"`：把新构建结果解压到网站目录。
+- `nginx -t`：检查 Nginx 配置是否正确。
 - `systemctl reload nginx`：平滑重载 Nginx。
 
 赋予执行权限：
@@ -694,17 +746,47 @@ sudo chmod +x /opt/deploy-fzblog.sh
 以后发布：
 
 ```sh
-sudo /opt/deploy-fzblog.sh
+bash /opt/deploy-fzblog.sh
 ```
+
+如果脚本只打印 `[1/4] Checking archive...` 就退出，说明服务器上没有 `/tmp/fzblog-dist.tar.gz`。先确认 Windows 端上传命令是否是：
+
+```sh
+scp fzblog-dist.tar.gz jd:/tmp/fzblog-dist.tar.gz
+```
+
+如果不是用 `root` 登录服务器，脚本里的 `nginx -t`、`systemctl reload nginx`、`chown`、`chmod` 可能需要加 `sudo`。
 
 ## 十六、常见问题
 
 ### 访问还是 Nginx 默认页
 
+先查看 Nginx 实际加载的配置：
+
+```sh
+sudo nginx -T 2>&1 | grep -nE "server_name|root|listen|default_server"
+```
+
+如果只看到类似：
+
+```nginx
+listen 80 default_server;
+root /var/www/html;
+server_name _;
+```
+
+并没有看到 `server_name blog.example.com;` 或 `root /var/www/fzblog;`，说明你的博客配置文件没有被 Nginx 加载。
+
 查看启用的站点：
 
 ```sh
 ls -l /etc/nginx/sites-enabled
+```
+
+如果没有 `fzblog -> /etc/nginx/sites-available/fzblog`，创建启用链接：
+
+```sh
+sudo ln -s /etc/nginx/sites-available/fzblog /etc/nginx/sites-enabled/fzblog
 ```
 
 如果存在 `default`：
@@ -733,6 +815,76 @@ archives/
 ```
 
 如果看到 `/var/www/fzblog/dist/index.html`，说明上传目录层级错了。
+
+### 服务器脚本停在 Checking archive
+
+如果执行：
+
+```sh
+bash /opt/deploy-fzblog.sh
+```
+
+只输出：
+
+```text
+[1/4] Checking archive...
+```
+
+说明服务器上没有脚本需要的压缩包：
+
+```sh
+/tmp/fzblog-dist.tar.gz
+```
+
+检查：
+
+```sh
+ls -lh /tmp/fzblog-dist.tar.gz
+```
+
+Windows 端上传命令必须和服务器脚本里的文件名一致：
+
+```bat
+scp fzblog-dist.tar.gz jd:/tmp/fzblog-dist.tar.gz
+```
+
+如果上传的是 `dist.tar.gz`，服务器脚本却找 `fzblog-dist.tar.gz`，脚本会立即退出。
+
+### bat 只执行了 npm run build
+
+`.bat` 调用 `npm` 时必须加 `call`：
+
+```bat
+call npm run build
+```
+
+不要写成：
+
+```bat
+npm run build
+```
+
+否则 Windows 调用 `npm.cmd` 后不会继续执行当前 bat 里的后续 `tar`、`scp`、`ssh` 命令。
+
+### scp 仍然要求输入密码或密钥密码
+
+`scp` 和 `ssh` 使用同一套 SSH 配置。建议在 Windows 的 `~/.ssh/config` 里配置别名，例如：
+
+```sshconfig
+Host jd
+  HostName 117.72.197.49
+  User root
+  IdentityFile C:\Users\你的用户名\.ssh\id_ed25519
+```
+
+然后 bat 里统一使用：
+
+```bat
+scp fzblog-dist.tar.gz jd:/tmp/fzblog-dist.tar.gz
+ssh jd "bash /opt/deploy-fzblog.sh"
+```
+
+如果提示 `Enter passphrase for key`，这是在输入本地私钥密码，不是服务器密码。可以用 `ssh-agent` 缓存私钥。
 
 ### 样式或图片丢失
 
@@ -867,14 +1019,19 @@ https://blog.example.com
 
 ### 后续更新
 
-```sh
-cd /opt/fzblog
-git pull
-npm install
-npm run build
-sudo rm -rf /var/www/fzblog/*
-sudo cp -r dist/* /var/www/fzblog/
-sudo chown -R www-data:www-data /var/www/fzblog
-sudo chmod -R 755 /var/www/fzblog
-sudo systemctl reload nginx
+在 Windows 本地项目目录执行：
+
+```bat
+deploy.bat
+```
+
+如果不使用 bat，手动命令是：
+
+```bat
+call npm run build
+if exist fzblog-dist.tar.gz del fzblog-dist.tar.gz
+tar -czf fzblog-dist.tar.gz -C dist .
+scp fzblog-dist.tar.gz jd:/tmp/fzblog-dist.tar.gz
+if exist fzblog-dist.tar.gz del fzblog-dist.tar.gz
+ssh jd "bash /opt/deploy-fzblog.sh"
 ```
