@@ -97,12 +97,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "消息、流与事件流.md",
+                "file": "结构化输出.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "消息、流与事件流"
+              "title": "结构化输出"
             }
           }
         ],
@@ -270,9 +270,9 @@
   },
   "active": "1db63b746d47aa3f",
   "lastOpenFiles": [
-    "agent长期记忆与短期记忆.md",
-    "中间件.md",
     "消息、流与事件流.md",
+    "中间件.md",
+    "agent长期记忆与短期记忆.md",
     "结构化输出.md",
     "初识 LangChain.md",
     "Agent 中断恢复.md",
